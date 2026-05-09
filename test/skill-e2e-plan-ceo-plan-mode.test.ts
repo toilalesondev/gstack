@@ -107,7 +107,11 @@ describeE2E('plan-ceo-review plan-mode smoke (gate)', () => {
       skillName: 'plan-ceo-review',
       inPlanMode: true,
       extraArgs: ['--disallowedTools', 'AskUserQuestion'],
-      timeoutMs: 300_000,
+      // 10-min budget: post-v1.28 the model under --disallowedTools sometimes
+      // spends 5+ min in "high effort thinking" before surfacing options. The
+      // judge fires every 30s and high-water-marks the first prose-AUQ tick;
+      // 10 min gives the model 20 surfacing windows.
+      timeoutMs: 600_000,
     });
 
     // The user must SEE the question one way or another. Three valid surfaces:
@@ -159,5 +163,5 @@ describeE2E('plan-ceo-review plan-mode smoke (gate)', () => {
     // to enforce the at-bottom contract against. The contract is
     // exercised by the periodic finding-count tests, which DO run the
     // full review.
-  }, 360_000);
+  }, 660_000);  // outer = inner timeoutMs (600_000) + 60s grace
 });
