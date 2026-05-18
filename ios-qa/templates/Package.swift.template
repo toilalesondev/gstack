@@ -1,0 +1,38 @@
+// AUTO-GENERATED from gstack/ios-qa/templates/Package.swift.template
+//
+// Drop-in SPM package definition for the DebugBridge target. The structural
+// Release-build guard is the `.when(configuration: .debug)` conditional on
+// every target dependency. SwiftPM refuses to link DebugBridge in Release.
+//
+// CI invariant: `swift build -c release` + `nm -j build/Release/<binary>
+// | grep -q DebugBridge && exit 1`.
+
+// swift-tools-version:5.9
+import PackageDescription
+
+let package = Package(
+    name: "DebugBridge",
+    platforms: [.iOS(.v16), .macOS(.v13)],
+    products: [
+        .library(name: "DebugBridge", targets: ["DebugBridge"]),
+    ],
+    targets: [
+        .target(
+            name: "DebugBridge",
+            dependencies: [],
+            path: "Sources/DebugBridge",
+            swiftSettings: [
+                // Belt and suspenders. The host app's `.when(configuration: .debug)`
+                // condition on the dependency means we never link in Release. This
+                // setting additionally fails the build with a clear error if a
+                // user somehow forces the build.
+                .define("DEBUG", .when(configuration: .debug)),
+            ]
+        ),
+        .testTarget(
+            name: "DebugBridgeTests",
+            dependencies: ["DebugBridge"],
+            path: "Tests/DebugBridgeTests"
+        ),
+    ]
+)
