@@ -134,15 +134,18 @@ public final class StateServer {
 
     private func startListener(family: AddressFamily) {
         do {
-            // Loopback-only binding: requiredInterfaceType=.loopback restricts the
-            // listener to lo0. NWListener does NOT honor requiredLocalEndpoint on
-            // its NWParameters (that's an outbound-connection concept) — so we
-            // pair the loopback interface gate with an explicit per-connection
-            // peer-address check below.
+            // Binding strategy: accept connections from the device's loopback
+            // AND from the CoreDevice tunnel (the USB-mounted tunnel the Mac
+            // daemon uses to reach this app — appears as a non-loopback
+            // utun-style interface on the device with the peer's source
+            // address in the fd*/fc* ULA range). We can't use
+            // params.acceptLocalOnly — Network.framework's definition of
+            // "local" is strictly loopback and silently drops CoreDevice
+            // tunnel peers. Instead we accept on the wildcard interface and
+            // do a per-connection peer-address check below: loopback OR
+            // RFC 4193 ULA (fc00::/7) → accept, everything else → cancel.
             let params = NWParameters.tcp
             params.allowLocalEndpointReuse = true
-            params.requiredInterfaceType = .loopback
-            params.acceptLocalOnly = true
 
             let listener = try NWListener(using: params, on: NWEndpoint.Port(rawValue: port)!)
             listener.stateUpdateHandler = { [weak self] state in
@@ -180,9 +183,25 @@ public final class StateServer {
         switch connection.endpoint {
         case .hostPort(let host, _):
             switch host {
-            case .ipv4(let addr): return addr == .loopback
-            case .ipv6(let addr): return addr.isLoopback
-            case .name(let name, _): return name == "localhost"
+            case .ipv4(let addr):
+                return addr == .loopback
+            case .ipv6(let addr):
+                // Loopback (::1) — local same-device traffic
+                if addr.isLoopback { return true }
+                // CoreDevice ULA range (fd00::/8 unique-local addresses) —
+                // the USB tunnel that the Mac daemon uses to reach this app.
+                // Apple's CoreDevice tunnel uses fd-prefixed ULAs like
+                // fd72:8347:2ead::1 (Mac-facing) and fd72:8347:2ead::2
+                // (device-facing). We accept the entire ULA range since
+                // the prefix is regenerated per session.
+                let bytes = addr.rawValue
+                if bytes.count >= 1 && (bytes[0] & 0xFE) == 0xFC {
+                    // RFC 4193 ULA range (fc00::/7) — fc* or fd* prefix.
+                    return true
+                }
+                return false
+            case .name(let name, _):
+                return name == "localhost"
             @unknown default: return false
             }
         default: return false
