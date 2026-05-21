@@ -9,7 +9,7 @@ gstack-driven PGLite installs now use `voyage:voyage-code-3` (1024-dim) as the d
 
 ### The numbers that matter
 
-Source: head-to-head A/B against `voyage-4-large` on this codebase using `gbrain query --no-expand` (pure vector retrieval, no LLM expansion). 10 realistic code queries — mix of symbol lookups, semantic intent, and design questions.
+Source: head-to-head A/B against `voyage-4-large` on this codebase using `gbrain query --no-expand` (pure vector retrieval, no LLM expansion). 10 realistic code queries, a mix of symbol lookups, semantic intent, and design questions.
 
 | Surface | voyage-4-large | voyage-code-3 | Δ |
 |---|---|---|---|
@@ -26,11 +26,11 @@ Source: head-to-head A/B against `voyage-4-large` on this codebase using `gbrain
 | `unicode sanitization at server egress` | `sanitize.test.ts` | `server-node.mjs sanitizeReplacer` |
 | `how does websocket auth use Sec-WebSocket-Protocol` | no results | `terminal-agent.ts buildServer` |
 
-The win pattern is exactly what voyage-code-3 advertises: surfacing implementation source over tests when the query is a code concept. Cost is unchanged from voyage-4-large at $0.18 per 1M tokens — a full reindex of a 100K-LOC repo runs about $0.20.
+The win pattern is exactly what voyage-code-3 advertises: surfacing implementation source over tests when the query is a code concept. Cost is unchanged from voyage-4-large at $0.18 per 1M tokens. A full reindex of a 100K-LOC repo runs about $0.20.
 
 ### What this means for builders
 
-If you have `VOYAGE_API_KEY` set and run `/setup-gbrain` on a fresh machine, `gbrain code-def`, `code-refs`, and semantic queries against your worktree now rank real implementation files above test fixtures with consistently higher confidence. No flag to pass, no config to edit. Existing brains keep whatever embedding model they were built with — the new default only applies to fresh inits. If you re-run `/setup-gbrain` on a machine that already has an OpenAI 1536-dim brain at `~/.gbrain/brain.pglite/`, the config rewrite triggers a column-dim mismatch that `gbrain doctor` will flag clearly; see `docs/embedding-migrations.md` for the wipe-and-reinit recipe.
+If you have `VOYAGE_API_KEY` set and run `/setup-gbrain` on a fresh machine, `gbrain code-def`, `code-refs`, and semantic queries against your worktree now rank real implementation files above test fixtures with consistently higher confidence. No flag to pass, no config to edit. Existing brains keep whatever embedding model they were built with. The new default only applies to fresh inits. If you re-run `/setup-gbrain` on a machine that already has an OpenAI 1536-dim brain at `~/.gbrain/brain.pglite/`, the config rewrite triggers a column-dim mismatch that `gbrain doctor` will flag clearly. Recovery is `mv ~/.gbrain/brain.pglite ~/.gbrain/brain.pglite.bak && gbrain init --pglite --embedding-model voyage:voyage-code-3 --embedding-dimensions 1024` followed by a fresh `/sync-gbrain`.
 
 ### Itemized changes
 
