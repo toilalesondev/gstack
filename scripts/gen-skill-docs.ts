@@ -59,6 +59,24 @@ const MODEL_ARG_VAL: Model = (() => {
   return resolved;
 })();
 
+// ─── Explain-level Overlay ──────────────────────────────────
+// --explain-level=terse compresses preamble prose (writing-style, completeness,
+// confusion-protocol, context-health) to a single pointer line at gen time.
+// Default keeps the runtime-conditional behavior (sections render unconditionally,
+// the model skips them when EXPLAIN_LEVEL: terse appears in the preamble echo).
+// Opt-in via the build flag so most users get the runtime-flexible default.
+const EXPLAIN_LEVEL_ARG = process.argv.find(a => a.startsWith('--explain-level'));
+const EXPLAIN_LEVEL: 'default' | 'terse' = (() => {
+  if (!EXPLAIN_LEVEL_ARG) return 'default';
+  const val = EXPLAIN_LEVEL_ARG.includes('=')
+    ? EXPLAIN_LEVEL_ARG.split('=')[1]
+    : process.argv[process.argv.indexOf(EXPLAIN_LEVEL_ARG) + 1];
+  if (val !== 'default' && val !== 'terse') {
+    throw new Error(`Unknown explain level: ${val}. Use 'default' or 'terse'.`);
+  }
+  return val;
+})();
+
 // HostPaths, HOST_PATHS, and TemplateContext imported from ./resolvers/types (line 7-8)
 // Design constants (AI_SLOP_BLACKLIST, OPENAI_HARD_REJECTIONS, OPENAI_LITMUS_CHECKS)
 // live in ./resolvers/constants and are consumed by resolvers directly.
@@ -430,7 +448,7 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
   const interactiveMatch = tmplContent.match(/^interactive:\s*(true|false)\s*$/m);
   const interactive = interactiveMatch ? interactiveMatch[1] === 'true' : undefined;
 
-  const ctx: TemplateContext = { skillName, tmplPath, benefitsFrom, host, paths: HOST_PATHS[host], preambleTier, model: MODEL_ARG_VAL, interactive };
+  const ctx: TemplateContext = { skillName, tmplPath, benefitsFrom, host, paths: HOST_PATHS[host], preambleTier, model: MODEL_ARG_VAL, interactive, explainLevel: EXPLAIN_LEVEL };
 
   // Replace placeholders (supports parameterized: {{NAME:arg1:arg2}})
   // Config-driven: suppressedResolvers return empty string for this host

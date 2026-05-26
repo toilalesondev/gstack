@@ -62,6 +62,22 @@ export interface TemplateContext {
   preambleTier?: number;  // 1-4, controls which preamble sections are included
   model?: Model;  // model family for behavioral overlay. Omitted/undefined → no overlay.
   interactive?: boolean;  // true → emit plan-mode handshake in preamble. Generator-only, not written to SKILL.md.
+  /**
+   * Build-time compression mode. Defaults to 'default'.
+   *
+   * - 'default': full preamble prose ships as today (writing style, completeness,
+   *   confusion protocol, context health are all present).
+   * - 'terse': writing-style + completeness + confusion-protocol + context-health
+   *   sections are compressed to a one-line pointer at gen time. Saves ~3-5 KB
+   *   per tier-2+ skill. Opt-in via `--explain-level=terse` build flag for
+   *   users who want shipped skills to match their runtime preference and
+   *   avoid the per-session terse-mode prose.
+   *
+   * Default builds keep the runtime-conditional behavior intact (Writing Style
+   * section says "skip entirely if EXPLAIN_LEVEL: terse appears in preamble echo").
+   * Terse builds make the compression structural — bytes never ship in the first place.
+   */
+  explainLevel?: 'default' | 'terse';
 }
 
 /** Resolver function signature. args is populated for parameterized placeholders like {{INVOKE_SKILL:name}}. */
