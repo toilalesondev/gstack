@@ -324,7 +324,36 @@ Effort both-scales: when an option involves effort, label both human-team and CC
 
 Net line closes the tradeoff. Per-skill instructions may add stricter rules.
 
-12. **Non-ASCII characters — write directly, never \u-escape.** When any
+### Handling 5+ options — split, never drop
+
+AskUserQuestion caps every call at **4 options**. With 5+ real options, NEVER
+drop, merge, or silently defer one to fit. Pick a compliant shape:
+
+- **Batch into ≤4-groups** — for coherent alternatives (e.g. version bumps,
+  layout variants). One call, 5th surfaced only if first 4 don't fit.
+- **Split per-option** — for independent scope items (e.g. "ship E1..E6?").
+  Fire N sequential calls, one per option. Default to this when unsure.
+
+Per-option call shape: `D<N>.k` header (e.g. D3.1..D3.5), ELI10 per option,
+Recommendation, kind-note (no completeness score — Include/Defer/Cut/Hold are
+decision actions), and 4 buckets:
+**A) Include**, **B) Defer**, **C) Cut**, **D) Hold** (stop chain, discuss).
+
+After the chain, fire `D<N>.final` to validate the assembled set (reprompt
+dependency conflicts) and confirm shipping it. Use `D<N>.revise-<k>` to
+revise one option without re-running the chain.
+
+For N>6, fire a `D<N>.0` meta-AskUserQuestion first (proceed / narrow / batch).
+
+question_ids for split chains: `<skill>-split-<option-slug>` (kebab-case ASCII,
+≤64 chars, `-2`/`-3` suffix on collision). The runtime checker
+(`bin/gstack-question-preference`) refuses `never-ask` on any `*-split-*` id,
+so split chains are never AUTO_DECIDE-eligible — the user's option set is sacred.
+
+**Full rule + worked examples + Hold/dependency semantics:** see
+`docs/askuserquestion-split.md` in the gstack repo. Read on demand when N>4.
+
+**Non-ASCII characters — write directly, never \u-escape.** When any
     string field (question, option label, option description) contains
     Chinese (繁體/簡體), Japanese, Korean, or other non-ASCII text, emit
     the literal UTF-8 characters in the JSON string. **Never escape them
@@ -357,6 +386,9 @@ Before calling AskUserQuestion, verify:
 - [ ] Net line closes the decision
 - [ ] You are calling the tool, not writing prose
 - [ ] Non-ASCII characters (CJK / accents) written directly, NOT \u-escaped
+- [ ] If you had 5+ options, you split (or batched into ≤4-groups) — did NOT drop any
+- [ ] If you split, you checked dependencies between options before firing the chain
+- [ ] If a per-option Hold fires, you stopped the chain immediately (didn't queue)
 
 
 ## Artifacts Sync (skill start)
@@ -604,7 +636,11 @@ If you are looping on the same diagnostic, same file, or failed fix variants, ST
 
 Before each AskUserQuestion, choose `question_id` from `scripts/question-registry.ts` or `{skill}-{slug}`, then run `$GSTACK_BIN/gstack-question-preference --check "<id>"`. `AUTO_DECIDE` means choose the recommended option and say "Auto-decided [summary] → [option] (your preference). Change with /plan-tune." `ASK_NORMALLY` means ask.
 
-After answer, log best-effort:
+**Embed the question_id as a marker in the question text** so hooks can identify it deterministically (plan-tune cathedral T14 / D18 progressive markers). Append `<gstack-qid:{question_id}>` somewhere in the rendered question (the leading line or trailing line is fine; the marker doesn't render visibly to the user when wrapped in HTML-style angle brackets, but the hook strips it). Without the marker the PreToolUse enforcement hook treats the AUQ as observed-only and never auto-decides — so always include it when the question matches a registered `question_id`.
+
+**Embed the option recommendation via the `(recommended)` label suffix** on exactly one option per AUQ. The PreToolUse hook parses `(recommended)` first, falls back to "Recommendation: X" prose, and refuses to auto-decide if ambiguous. Two `(recommended)` labels = refuse.
+
+After answer, log best-effort (PostToolUse hook also captures deterministically when installed; dedup on (source, tool_use_id) handles double-writes):
 ```bash
 $GSTACK_BIN/gstack-question-log '{"skill":"ship","question_id":"<id>","question_summary":"<short>","category":"<approval|clarification|routing|cherry-pick|feedback-loop>","door_type":"<one-way|two-way>","options_count":N,"user_choice":"<key>","recommended":"<key>","session_id":"'"$_SESSION_ID"'"}' 2>/dev/null || true
 ```
@@ -2657,6 +2693,29 @@ Substitute from earlier steps:
 - **BRANCH**: current branch name
 
 This step is automatic — never skip it, never ask for confirmation.
+
+---
+
+## Step 21: Plan-tune discoverability nudge (first-successful-ship only)
+
+Plan-tune cathedral T15. After a successful ship, surface /plan-tune once
+per machine. Single line, non-blocking, marker-gated so it never re-fires.
+
+```bash
+_NUDGE_MARKER="$HOME/.gstack/.plan-tune-nudge-shown"
+_QT=$($GSTACK_ROOT/bin/gstack-config get question_tuning 2>/dev/null || echo "false")
+if [ ! -f "$_NUDGE_MARKER" ] && [ "$_QT" = "false" ]; then
+  echo ""
+  echo "gstack can learn from your AskUserQuestion answers. Run /plan-tune to opt in"
+  echo "— it captures which prompts you find valuable vs noisy and (with hooks installed)"
+  echo "auto-decides your never-ask preferences."
+  touch "$_NUDGE_MARKER"
+fi
+```
+
+If the marker exists, OR question_tuning is already on, the nudge is a
+no-op. The marker guarantees at-most-once per machine. To re-enable:
+`rm ~/.gstack/.plan-tune-nudge-shown` before next ship.
 
 ---
 
