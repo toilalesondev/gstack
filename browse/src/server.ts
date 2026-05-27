@@ -724,6 +724,11 @@ let inspectorTimestamp: number = 0;
 type InspectorSubscriber = (event: any) => void;
 const inspectorSubscribers = new Set<InspectorSubscriber>();
 
+/** Diagnostic accessor used by the $B memory snapshot. */
+export function getInspectorSubscriberCount(): number {
+  return inspectorSubscribers.size;
+}
+
 function emitInspectorEvent(event: any): void {
   for (const notify of inspectorSubscribers) {
     queueMicrotask(() => {
