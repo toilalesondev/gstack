@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.50.0.0] - 2026-05-27
+## [1.52.0.0] - 2026-05-27
 
 ## **`/plan-tune` settings actually do something now. Hooks make capture deterministic, preferences binding, and free-text answers loop back as memory.**
 
@@ -12,7 +12,7 @@ The cathedral lands behind one explicit consent prompt at `./setup` (with diff p
 
 Measured against the existing v1.49 substrate. Reproduce with `bun test test/plan-tune-gates.test.ts test/question-log-hook.test.ts test/question-preference-hook.test.ts test/memory-cache-injection.test.ts test/distill-free-text.test.ts test/distill-apply.test.ts test/declared-annotation.test.ts test/gstack-codex-session-import.test.ts test/skill-e2e-plan-tune-cathedral.test.ts`.
 
-| Metric | Before (v1.49.0.0) | After (v1.50.0.0) | Δ |
+| Metric | Before (v1.49.0.0) | After (v1.52.0.0) | Δ |
 |---|---|---|---|
 | AUQ events captured per session | 0 (agent convention) | every fire (hook) | substrate works |
 | `never-ask` preferences enforced | 0% (agent convention) | 100% (hook + deny+reason) | actually binds |
