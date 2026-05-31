@@ -1390,6 +1390,75 @@ describe('INVOKE_SKILL resolver', () => {
   });
 });
 
+// --- /land skill: composition into /land-and-deploy + generated-doc scrub (H9) ---
+
+describe('/land skill composition', () => {
+  const landTmpl = fs.readFileSync(path.join(ROOT, 'land', 'SKILL.md.tmpl'), 'utf-8');
+  const landMd = fs.readFileSync(path.join(ROOT, 'land', 'SKILL.md'), 'utf-8');
+  const ladTmpl = fs.readFileSync(path.join(ROOT, 'land-and-deploy', 'SKILL.md.tmpl'), 'utf-8');
+  const ladMd = fs.readFileSync(path.join(ROOT, 'land-and-deploy', 'SKILL.md'), 'utf-8');
+
+  test('land-and-deploy composes /land via {{INVOKE_SKILL:land}}', () => {
+    expect(ladTmpl).toContain('{{INVOKE_SKILL:land}}');
+  });
+
+  test('land-and-deploy SKILL.md resolves the composition prose to the land skill', () => {
+    expect(ladMd).toContain('land/SKILL.md');
+    expect(ladMd).toContain('Follow its instructions from top to bottom');
+  });
+
+  test('land-and-deploy no longer carries its own merge step (merge lives in /land)', () => {
+    // The parent must compose /land, not run gh pr merge itself.
+    expect(ladMd).not.toContain('gh pr merge --auto --delete-branch');
+    expect(ladMd).not.toContain('## Step 4: Merge the PR');
+  });
+
+  test('land-and-deploy consumes the handoff via gstack-merge read-state', () => {
+    expect(ladMd).toContain('gstack-merge read-state');
+    expect(ladMd).toContain('last-land.json');
+  });
+
+  // H9 — generated-doc scrub: extracting the land half "verbatim" risks dragging
+  // deploy/canary machinery into /land. Forbid the machinery tokens (not the words
+  // "deploy"/"canary", which legitimately appear in /land-and-deploy cross-refs).
+  test('/land SKILL.md carries no deploy/canary machinery (H9)', () => {
+    const forbidden = [
+      'deploy-reports',
+      'DEPLOY_BOOTSTRAP',
+      '$B goto',
+      '$B console',
+      '$B perf',
+      '$B snapshot',
+      'Canary verification',
+      'Wait for deploy',
+      'gh run list',
+    ];
+    const offenders = forbidden.filter((s) => landMd.includes(s));
+    expect(offenders).toEqual([]);
+  });
+
+  test('/land drives the merge through the gstack-merge helper', () => {
+    expect(landMd).toContain('gstack-merge submit');
+    expect(landMd).toContain('gstack-merge wait');
+    expect(landMd).toContain('gstack-merge write-state');
+    expect(landMd).toContain('gstack-merge detect');
+  });
+
+  test('/land uses {{BASE_BRANCH_DETECT}} so composition correctly skips the duplicate', () => {
+    // The INVOKE_SKILL skip-list skips "Step 0: Detect platform and base branch",
+    // which is exactly what BASE_BRANCH_DETECT emits — so the parent's detection
+    // wins when composed, and standalone /land runs its own.
+    expect(landTmpl).toContain('{{BASE_BRANCH_DETECT}}');
+  });
+
+  test('/land documents all three merge regimes', () => {
+    expect(landMd).toContain('trunk');
+    expect(landMd).toContain('/trunk merge');
+    expect(landMd).toMatch(/gh pr merge .*--squash/);
+    expect(landMd).toContain('--auto');
+  });
+});
+
 // --- {{CHANGELOG_WORKFLOW}} resolver tests ---
 
 describe('CHANGELOG_WORKFLOW resolver', () => {
