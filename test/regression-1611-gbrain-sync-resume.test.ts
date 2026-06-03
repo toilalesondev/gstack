@@ -36,6 +36,7 @@ import {
   decideResume,
 } from "../bin/gstack-gbrain-sync";
 import { checkOwnedStagingDir, STAGING_MARKER } from "../lib/staging-guard";
+import { stagedRelPath, readNewFailures } from "../bin/gstack-memory-ingest";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const DEFAULT_MS = 35 * 60 * 1000;
@@ -405,5 +406,53 @@ describe("#1802 C3 — import-timeout preserve (static invariant)", () => {
     expect(ingest).toMatch(
       /if \(!remoteHttpMode && !preserveStaging\) cleanupStagingDir\(stagingDir\)/,
     );
+  });
+});
+
+// ── #1802 C4: resume must not mark failed files as ingested ─────────────────
+// readNewFailures() maps gbrain's per-file failures (keyed by staging-relative
+// path) back to source paths so the caller can EXCLUDE them from state
+// recording. On resume the map was rebuilt empty, so every failure was lost and
+// the failed file was silently marked ingested. This proves the reconstructed
+// map (built with stagedRelPath, the same key writeStaged uses) recovers it.
+describe("#1802 C4 — resume failure mapping (behavioral)", () => {
+  let dir: string;
+  let cpHome: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "gstack-1802c4-"));
+    cpHome = fs.mkdtempSync(path.join(os.tmpdir(), "gstack-1802c4-fail-"));
+  });
+  afterEach(() => {
+    for (const d of [dir, cpHome]) {
+      try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* best-effort */ }
+    }
+  });
+
+  test("stagedRelPath matches the writeStaged key format", () => {
+    expect(stagedRelPath("my-slug")).toBe("my-slug.md");
+    expect(stagedRelPath("nested/slug")).toBe("nested/slug.md");
+  });
+
+  test("reconstructed map maps the failure back to its source; empty map loses it", () => {
+    const failuresPath = path.join(cpHome, "sync-failures.jsonl");
+    // gbrain records the failure keyed by the staging-relative path.
+    fs.writeFileSync(
+      failuresPath,
+      JSON.stringify({ path: stagedRelPath("doc-a"), error: "boom" }) + "\n",
+      "utf-8",
+    );
+
+    // The resume-path reconstruction: built from prepared pages via stagedRelPath.
+    const reconstructed = new Map<string, string>([
+      [stagedRelPath("doc-a"), "/src/doc-a.json"],
+    ]);
+    const recovered = readNewFailures(failuresPath, 0, reconstructed);
+    expect(recovered.has("/src/doc-a.json")).toBe(true);
+
+    // The pre-fix bug: an empty map (what resume used) drops the failure, so the
+    // caller would state-record /src/doc-a.json as ingested.
+    const lost = readNewFailures(failuresPath, 0, new Map());
+    expect(lost.size).toBe(0);
   });
 });

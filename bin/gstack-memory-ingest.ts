@@ -908,13 +908,23 @@ interface StagingResult {
  * Filename = `${slug}.md`. mkdir is recursive. Existing files overwrite.
  * Errors per-file are collected; the whole batch is best-effort.
  */
+/**
+ * Staging-relative path for a prepared page's slug. Single source of truth so
+ * writeStaged() (which mints the map) and the resume-path reconstruction (#1802
+ * C4) compute identical keys — if they diverge, readNewFailures() silently stops
+ * mapping gbrain's failures back to sources and failed files get marked ingested.
+ */
+export function stagedRelPath(slug: string): string {
+  return `${slug}.md`;
+}
+
 function writeStaged(prepared: PreparedPage[], stagingDir: string): StagingResult {
   mkdirSync(stagingDir, { recursive: true });
   const stagedPathToSource = new Map<string, string>();
   const errors: Array<{ slug: string; error: string }> = [];
   let written = 0;
   for (const p of prepared) {
-    const relPath = `${p.slug}.md`;
+    const relPath = stagedRelPath(p.slug);
     const absPath = join(stagingDir, relPath);
     try {
       mkdirSync(dirname(absPath), { recursive: true });
@@ -979,7 +989,7 @@ function parseImportJson(stdout: string): ImportJsonResult | null {
  * staging-dir-relative filename gbrain saw (e.g. "transcripts/foo.md").
  * stagedPathToSource maps that back to the original source file.
  */
-function readNewFailures(
+export function readNewFailures(
   syncFailuresPath: string,
   preImportOffset: number,
   stagedPathToSource: Map<string, string>,
@@ -1572,7 +1582,15 @@ async function ingestPass(args: CliArgs): Promise<BulkResult> {
           `[memory-ingest] resuming previous staging dir ${stagingDir} (skipping prepare phase)`,
         );
       }
-      staging = { staging_dir: stagingDir, written: prep.prepared.length, errors: [], stagedPathToSource: new Map() };
+      // #1802 C4: reconstruct stagedPathToSource from the prepared pages so
+      // readNewFailures() can still map gbrain's per-file failures back to
+      // sources on resume. An empty map made every failed file fall through to
+      // state-recording — i.e. silently marked ingested despite failing.
+      const stagedPathToSource = new Map<string, string>();
+      for (const p of prep.prepared) {
+        stagedPathToSource.set(stagedRelPath(p.slug), p.source_path);
+      }
+      staging = { staging_dir: stagingDir, written: prep.prepared.length, errors: [], stagedPathToSource };
     } else {
       staging = writeStaged(prep.prepared, stagingDir);
     }
